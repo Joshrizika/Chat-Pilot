@@ -1,0 +1,2 @@
+[console_scripts]
+imessage_reader = imessage_reader.cli:main
