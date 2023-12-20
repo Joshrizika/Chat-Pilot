@@ -71,19 +71,20 @@ class App(QMainWindow):
     def create_contact_list(self, tab_name):
         # Create a group box for the contact list and search box
         contact_list_group = QGroupBox("Contacts")
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(contact_list_group)
 
         search_box = QLineEdit()
         search_box.setPlaceholderText("Search contacts...")
-        layout.addWidget(search_box)
+
+        # Connect the textChanged signal of the search box to the filter_contacts method
+        search_box.textChanged.connect(lambda text: self.filter_contacts(text, contact_list))
 
         contact_list = QListWidget()
-        contact_list.addItems(self.contacts.keys())
+        contact_list.addItems(sorted(self.contacts.keys()))
         contact_list.itemClicked.connect(lambda item: self.contact_selected(item, tab_name))
-        layout.addWidget(contact_list)
 
-        # Set the layout for the group box
-        contact_list_group.setLayout(layout)
+        layout.addWidget(search_box)
+        layout.addWidget(contact_list)
 
         return contact_list_group
 
