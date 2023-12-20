@@ -45,7 +45,7 @@ def get_recent_messages(target_number, last_id_checked):
     cursor = conn.cursor() #create cursor
 
     cursor.execute(""" 
-        SELECT m.ROWID, m.text, CASE WHEN a.mime_type LIKE 'image/%' THEN 1 ELSE 0 END as is_image, CASE WHEN a.mime_type LIKE 'video/%' THEN 1 ELSE 0 END as is_video ,a.filename
+        SELECT m.ROWID, m.text, CASE WHEN a.mime_type IS NOT NULL THEN 1 ELSE 0 END as is_media, a.mime_type, a.filename
         FROM message m
         LEFT JOIN message_attachment_join maj ON m.ROWID = maj.message_id
         LEFT JOIN attachment a ON maj.attachment_id = a.ROWID
@@ -57,13 +57,29 @@ def get_recent_messages(target_number, last_id_checked):
     messages = cursor.fetchall() #get messages from cursor
     conn.close() #close connection
 
-    processed_messages = []
-    for message in messages:
-        message_id, text, is_image, is_video, filename = message
-        if is_image:
-            processed_messages.append((message_id, text, bool(is_image), bool(is_video), filename.replace('~', f'/Users/{getpass.getuser()}')))
-        else:
-            processed_messages.append((message_id, text, bool(is_image), bool(is_video), filename))
+    processed_messages = postprocess_messages(messages) #postprocess messages
+    return processed_messages #return messages
+
+# function: deal with attatchments and reactions
+# parameters: target_number - string, last_id_checked - int, pattern - string
+# returns: list of messages
+def postprocess_messages(messages):
+    print("messages: ", messages)
+    pattern = r'^(Loved|Liked|Disliked|Laughed at|Emphasized) “.*”$' #define pattern to check for reactions
+    processed_messages = [] #create messages list
+    for message in messages: #for each message in recent messages
+        message_id, text, is_media, file_type, filepath = message
+        is_media = bool(is_media)
+        if not re.match(pattern, text): #if message is not a reaction
+            if is_media: #if message is media
+                filepath = filepath.replace('~', f'/Users/{getpass.getuser()}') #replace ~ with user directory
+                if file_type.startswith("image"): #if message is an image
+                    processed_messages.append((message_id, generate_image_description(filepath), is_media, file_type, filepath)) #add image description to messages
+                elif message[3].startswith("video"):
+                    processed_messages.append((message_id, "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", is_media, file_type, filepath)) #add excuse for video to messages
+            else: #if message is not media
+                processed_messages.append((message_id, text, is_media, file_type, filepath)) #add message to messages
+    print("processed messages: ", processed_messages)
     return processed_messages #return messages
 
 # function: generate a response from GPT
@@ -208,17 +224,8 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
 
     while not stop_flag.is_set(): #loop forever
         check_interval = 5 #set check interval
-        pattern = r'^(Loved|Liked|Disliked|Laughed at|Emphasized) “.*”$' #define pattern to check for reactions
         start_time = time.time() #get start time
-        messages = []
-        for message in get_recent_messages(target_number, last_id_checked): #for each message in recent messages
-            if not re.match(pattern, message[1]): #if message is not a reaction
-                if message[2]: #if message is an image
-                    messages.append((message[0], generate_image_description(message[4]), message[2], message[3], message[4])) #add image description to messages
-                if message[3]: #if message is a video
-                    messages.append((message[0], "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", message[2], message[3], message[4])) #add excuse for video to messages
-                else: #if message is not an image
-                    messages.append(message) #add message to messages
+        messages = get_recent_messages(target_number, last_id_checked) #get recent messages
         if len(messages) > 0: #if there are new messages
             concatenated_text = ' '.join([row[1] for row in messages[::-1]]) #concatenate messages
             print("concatenated_text: ", concatenated_text)
@@ -242,15 +249,7 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
                 break
             print("checking for new messages...")
             start_time = time.time() #get start time
-            new_messages = []
-            for message in get_recent_messages(target_number, last_id_checked): #for each message in recent messages
-                if not re.match(pattern, message[1]): #if message is not a reaction
-                    if message[2]: #if message is an image
-                        new_messages.append((message[0], generate_image_description(message[4]), message[2], message[3], message[4])) #add image description to messages
-                    if message[3]: #if message is a video
-                        new_messages.append((message[0], "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", message[2], message[3], message[4])) #add excuse for video to messages
-                    else: #if message is not an image
-                        new_messages.append(message) #add message to messages
+            new_messages = get_recent_messages(target_number, last_id_checked) #get recent messages
             while len(new_messages) > len(messages): #while there are new messages
                 print("new message received")
                 messages = new_messages #update messages
@@ -277,15 +276,7 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
                     break
                 print("checking for new messages...")
                 start_time = time.time() #get start time
-                new_messages = []
-                for message in get_recent_messages(target_number, last_id_checked): #for each message in recent messages
-                    if not re.match(pattern, message[1]): #if message is not a reaction
-                        if message[2]: #if message is an image
-                            new_messages.append((message[0], generate_image_description(message[4]), message[2], message[3], message[4])) #add image description to messages
-                        if message[3]: #if message is a video
-                            new_messages.append((message[0], "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", message[2], message[3], message[4])) #add excuse for video to messages
-                        else: #if message is not an image
-                            new_messages.append(message) #add message to messages
+                new_messages = get_recent_messages(target_number, last_id_checked) #get recent messages
             print("sending message responding to", concatenated_text)
             print("response_message: ", response_message)
             os.system(f'osascript sendMessage.applescript "{target_number}" "{response_message}"') #send response message         
