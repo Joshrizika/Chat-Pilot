@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
 from PyQt5.QtCore import Qt
 import sys
 import subprocess
@@ -27,22 +27,47 @@ def get_contacts():
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
         return None
-
+    
+# ThreadItemWidget class
 class ThreadItemWidget(QWidget):
-    def __init__(self, relation_description, recipient, user_name, model, words_per_minute, stop_callback, parent=None):
+    def __init__(self, relation_description, recipient, user_name, model, words_per_minute, conversation_context, stop_callback, double_click_callback, parent=None):
         super().__init__(parent)
-        layout = QHBoxLayout(self)
+        self.layout = QHBoxLayout(self)
+        self.double_click_callback = double_click_callback
 
-        # Format and set the thread information
-        thread_info = f"Currently chatting with your {relation_description} {recipient} as {user_name}. \nThis chat uses {model} and responds at {words_per_minute} words per minute."
-        self.label = QLabel(thread_info)
-        layout.addWidget(self.label)
+        # Basic thread information
+        self.basic_info = f"Currently chatting with your {relation_description} {recipient} as {user_name}."
+        self.label = QLabel(self.basic_info)
+        self.layout.addWidget(self.label)
+
+        # Detailed information
+        self.detailed_info = (recipient, relation_description, user_name, conversation_context, words_per_minute, model)
+
+        self.layout.addStretch(1)  # Add stretch to push buttons to the right
 
         # Stop button
         self.stop_button = QPushButton("Stop", self)
         self.stop_button.clicked.connect(stop_callback)
-        layout.addStretch(1)
-        layout.addWidget(self.stop_button)
+        self.layout.addWidget(self.stop_button)
+
+    def get_detailed_info(self):
+        # Unpack the detailed information
+        recipient, relation_description, user_name, conversation_context, words_per_minute, model = self.detailed_info
+        
+        # Use HTML to format the labels as bold
+        detailed_info = (
+            f"<b>Your name:</b> {user_name}<br>"
+            f"<b>Recipient name:</b> {recipient}<br>"
+            f"<b>Relationship:</b> {relation_description}<br>"
+            f"<b>Conversation context:</b> {conversation_context}<br>"
+            f"<b>Response Speed (WPM):</b> {words_per_minute}<br>"
+            f"<b>GPT Model:</b> {model}"
+        ) 
+        return detailed_info
+
+    def mouseDoubleClickEvent(self, event):
+        # Signal to show detailed information
+        self.double_click_callback(self)
 
 class App(QMainWindow):
     def __init__(self):
@@ -97,16 +122,13 @@ class App(QMainWindow):
     def contact_selected(self, item, tab_name):
         contact_name = item.text()
         self.contact_info[tab_name] = (contact_name, self.contacts[contact_name])
-        print(f"Selected number for {tab_name}: {self.contact_info[tab_name][1]}")
-        print(f"Selected name for {tab_name}: {self.contact_info[tab_name][0]}")
+        # print(f"Selected number for {tab_name}: {self.contact_info[tab_name][1]}")
+        # print(f"Selected name for {tab_name}: {self.contact_info[tab_name][0]}")
 
     def tab1_layout(self):
         main_layout = QHBoxLayout()
-
-        # Left side layout
         left_side_layout = QVBoxLayout()
-
-        # GroupBox for 'Your Name' Input
+        
         name_group = QGroupBox("Your Name")
         name_layout = QVBoxLayout()
         self.name_input = QLineEdit()
@@ -115,20 +137,15 @@ class App(QMainWindow):
         name_group.setLayout(name_layout)
         left_side_layout.addWidget(name_group)
 
-        # Contact List
         contact_list_group = self.create_contact_list("tab1")
         left_side_layout.addWidget(contact_list_group)
 
-        # Add left side layout to main layout
         main_layout.addLayout(left_side_layout, 1)
 
-        # Right side - Vertical Layout for Grouped Inputs and Thread List
-        right_side_layout = QVBoxLayout()
-
-        # Horizontal Layout for Grouped Inputs
+        self.right_side_layout = QVBoxLayout()
+        
         inputs_layout = QHBoxLayout()
-
-        # GroupBox for Description Input
+        
         description_group = QGroupBox("Relation to Contact")
         description_layout = QVBoxLayout()
         self.description_input = QLineEdit()
@@ -137,8 +154,7 @@ class App(QMainWindow):
         description_group.setLayout(description_layout)
         inputs_layout.addWidget(description_group)
 
-        # GroupBox for Words Per Minute Input
-        wpm_group = QGroupBox("Words Per Minute")
+        wpm_group = QGroupBox("Response Speed (Words Per Minute)")
         wpm_layout = QVBoxLayout()
         self.wpm_input = QSpinBox()
         self.wpm_input.setRange(10, 200)
@@ -147,7 +163,6 @@ class App(QMainWindow):
         wpm_group.setLayout(wpm_layout)
         inputs_layout.addWidget(wpm_group)
 
-        # GroupBox for GPT Model Selection
         model_group = QGroupBox("GPT Model")
         model_layout = QVBoxLayout()
         self.model_selection = QComboBox()
@@ -156,21 +171,37 @@ class App(QMainWindow):
         model_group.setLayout(model_layout)
         inputs_layout.addWidget(model_group)
 
-        # Add the inputs layout to the right side layout
-        right_side_layout.addLayout(inputs_layout)
+        self.right_side_layout.addLayout(inputs_layout)
 
-        # Add Submit Button
+        context_group = QGroupBox("Context")
+        context_layout = QVBoxLayout()
+        self.context_input = QTextEdit()
+        self.context_input.setPlaceholderText("Add any context you'd like to provide to the AI here. (optional)")
+        self.context_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.context_input.setFixedHeight(100)
+        context_layout.addWidget(self.context_input)
+        context_group.setLayout(context_layout)
+        self.right_side_layout.addWidget(context_group)
+
         self.submit_button = QPushButton("Submit")
         self.submit_button.clicked.connect(self.run_AI_conversation)
-        right_side_layout.addWidget(self.submit_button)
+        self.right_side_layout.addWidget(self.submit_button)
 
-        # Add QListWidget to display threads
         self.thread_list_widget = QListWidget()
-        right_side_layout.addWidget(self.thread_list_widget)
+        self.right_side_layout.addWidget(self.thread_list_widget)
 
-        # Add the right side layout to the main layout with stretch factor
-        main_layout.addLayout(right_side_layout, 3)
+        self.return_to_thread_list_button = QPushButton("Return to Active Conversations")
+        self.return_to_thread_list_button.clicked.connect(self.return_to_thread_list)
+        self.return_to_thread_list_button.hide()
+        self.right_side_layout.addWidget(self.return_to_thread_list_button)
 
+        self.detailed_text_area = QTextEdit(self)
+        self.detailed_text_area.setReadOnly(True)
+        self.detailed_text_area.hide()
+        self.right_side_layout.addWidget(self.detailed_text_area)
+
+
+        main_layout.addLayout(self.right_side_layout, 3)
         self.tab1.setLayout(main_layout)
     
     def keyPressEvent(self, event):
@@ -179,13 +210,18 @@ class App(QMainWindow):
         super(App, self).keyPressEvent(event)
 
     def run_AI_conversation(self):
+        self.user_name = self.name_input.text()
         self.relation_description = self.description_input.text()
         self.words_per_minute = self.wpm_input.value()
         self.selected_model = self.model_selection.currentText()
-        self.user_name = self.name_input.text()
+        self.conversation_context = self.context_input.toPlainText()
+        if self.conversation_context == "":
+            self.conversation_context = None
+        print(f"context: {self.conversation_context}")
         target_name = self.contact_info['tab1'][0]
 
-        if not self.contact_info['tab1'][0]:
+
+        if not target_name:
             QMessageBox.warning(self, "Error", "Please select a recipient.")
             return
 
@@ -209,7 +245,8 @@ class App(QMainWindow):
             "recipient": target_name,
             "user_name": self.user_name,
             "model": self.selected_model,
-            "words_per_minute": self.words_per_minute
+            "words_per_minute": self.words_per_minute,
+            "conversation_context": self.conversation_context
         }
         stop_flag = threading.Event()
         thread = threading.Thread(target=self.ai_conversation, args=(stop_flag,))
@@ -220,7 +257,7 @@ class App(QMainWindow):
 
     def ai_conversation(self, stop_flag):
         # Call the modified converse_with_AI function with the stop flag
-        converse_with_AI(self.contact_info['tab1'][1], self.contact_info['tab1'][0], self.user_name, self.relation_description, self.words_per_minute, self.selected_model, stop_flag)
+        converse_with_AI(self.contact_info['tab1'][1], self.contact_info['tab1'][0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag)
 
     def stop_conversation(self, thread_index):
         if 0 <= thread_index < len(self.running_threads):
@@ -231,23 +268,36 @@ class App(QMainWindow):
             print(f"Stopping thread {thread_index+1}")
             self.update_thread_list()  # Update the GUI immediately
 
+    def show_detailed_info(self, thread_widget):
+        self.thread_list_widget.hide()
+        self.submit_button.hide()
+
+        self.return_to_thread_list_button.show()
+
+        # Set the detailed information in the text area and show it
+        self.detailed_text_area.setHtml(thread_widget.get_detailed_info())
+        self.detailed_text_area.show()
+
+    def return_to_thread_list(self):
+        # Hide the detailed text area
+        self.return_to_thread_list_button.hide()
+        self.detailed_text_area.hide()
+
+
+        self.thread_list_widget.show()
+        self.submit_button.show()
+
+
     def update_thread_list(self):
         self.thread_list_widget.clear()
         for i, (thread, _, thread_info) in enumerate(self.running_threads):
             if thread.is_alive():
                 item = QListWidgetItem(self.thread_list_widget)
-                widget = ThreadItemWidget(**thread_info, stop_callback=lambda: self.stop_conversation(i), parent=self.thread_list_widget)
+                widget = ThreadItemWidget(**thread_info, stop_callback=lambda: self.stop_conversation(i), double_click_callback=self.show_detailed_info, parent=self.thread_list_widget)
                 item.setSizeHint(widget.sizeHint())
                 self.thread_list_widget.addItem(item)
                 self.thread_list_widget.setItemWidget(item, widget)
-    
-    # def tab_layout(self, tab_name):
-    #     layout = QHBoxLayout()
-    #     contact_list_layout = self.create_contact_list(tab_name)
-    #     layout.addLayout(contact_list_layout, 1)  # Adjust the proportion as needed
-    #     layout.addWidget(QLabel(f"Content of {tab_name.capitalize()}"), 3)  # Adjust the proportion as needed
-    #     return layout
-    
+
     def tab2_layout(self):
         main_layout = QHBoxLayout()
 
