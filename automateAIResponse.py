@@ -64,7 +64,7 @@ def get_recent_messages(target_number, last_id_checked):
 # parameters: target_number - string, last_id_checked - int, pattern - string
 # returns: list of messages
 def postprocess_messages(messages):
-    print("messages: ", messages)
+    # print("messages: ", messages)
     pattern = r'^(Loved|Liked|Disliked|Laughed at|Emphasized) “.*”$' #define pattern to check for reactions
     processed_messages = [] #create messages list
     for message in messages: #for each message in recent messages
@@ -79,18 +79,24 @@ def postprocess_messages(messages):
                     processed_messages.append((message_id, "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", is_media, file_type, filepath)) #add excuse for video to messages
             else: #if message is not media
                 processed_messages.append((message_id, text, is_media, file_type, filepath)) #add message to messages
-    print("processed messages: ", processed_messages)
+    # print("processed messages: ", processed_messages)
     return processed_messages #return messages
 
 # function: generate a response from GPT
 # parameters: incoming_message - string, conversation_history - list of messages, recipient_name - string, recipient_description - string
 # returns: response message
-def generate_response(incoming_message, conversation_history, user_name, recipient_name, recipient_description, gpt_model):
+def generate_response(incoming_message, conversation_history, user_name, recipient_name, recipient_description, conversation_context, gpt_model):
     client = OpenAI() #create OpenAI client
     gpt_model_number = float(gpt_model.split("-")[1].split(".")[0]) #get model number
+
+    if conversation_context: #if context is provided
+        content = f"You are an imaginative person named {user_name}. Before responding to a text message from {recipient_name}, who is your {recipient_description}, you are given additional context about the situation in the form of {conversation_context}. This context is crucial for understanding the nuances of your interaction with {recipient_name}. Keep this context in mind as you read and respond to their message. Your responses should be indistinguishable from a real human's. Avoid phrases like 'how can I assist you today?' or anything that might imply assistance or service. If asked to perform a task, politely explain that you are currently unable to do so, providing a creative, believable reason. This reason can be whimsical or imaginative but should sound plausible and human-like. Always maintain the persona of a real person, tailoring your responses to the specific situation and the context provided." 
+    else: #if context is not provided
+        content = f"You are an imaginative person named {user_name} responding to a text message from a person named {recipient_name}, this person's relationship to {user_name} can be described as their {recipient_description}. Your responses should be indistinguishable from a real human's. Do not use phrases like 'how can I assist you today?' or anything similar that might imply assistance or service. If asked to perform a task, politely explain that you are currently unable to do so and provide a creative, believable reason. The reason can be whimsical or imaginative but should sound plausible and human-like. Always maintain the persona of a real person in the conversation."
+    
     messages = [{ #give GPT inital instruction prompt
         "role": "assistant", 
-        "content": f"You are an imaginative person named {user_name} responding to a text message from a person named {recipient_name}, this person's relationship to {user_name} can be described as their {recipient_description}. Your responses should be indistinguishable from a real human's. Do not use phrases like 'how can I assist you today?' or anything similar that might imply assistance or service. If asked to perform a task, politely explain that you are currently unable to do so and provide a creative, believable reason. The reason can be whimsical or imaginative but should sound plausible and human-like. Always maintain the persona of a real person in the conversation."}]
+        "content": content}]
     messages.extend(conversation_history)  #add previous conversation
 
     pattern = r'^.*Questioned “(.*?)”.*$' #define pattern to check for questioned text
@@ -217,7 +223,7 @@ def sleep_with_check(sleep_time, stop_flag):
 # function: have a conversation with AI using a target name
 # parameters: target_name - string, target_description - string
 # returns: nothing
-def converse_with_AI(target_number, target_name, user_name, target_description, words_per_minute, gpt_model, stop_flag):
+def converse_with_AI(target_number, target_name, user_name, target_description, words_per_minute, conversation_context, gpt_model, stop_flag):
     CONVERSATION_HISTORY = [] #create conversation history
     print("listening for messages from {}".format(target_number))
     last_id_checked = get_last_message_id() #get id of last message
@@ -231,7 +237,7 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
             print("concatenated_text: ", concatenated_text)
 
             print("generating ai response...")
-            response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, gpt_model) #generate response
+            response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, conversation_context, gpt_model) #generate response
             response_generation_time = time.time() - start_time #calculate response generation time
             print("response_message: ", response_message)
             print("response_generation_time: ", response_generation_time)
@@ -257,7 +263,7 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
                 print("new concatenated_text: ", concatenated_text)
 
                 print("generating new ai response...")
-                response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, gpt_model) #generate response
+                response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, conversation_context, gpt_model) #generate response
                 response_generation_time = time.time() - start_time #calculate response generation time
 
                 if stop_flag.is_set():
@@ -284,8 +290,8 @@ def converse_with_AI(target_number, target_name, user_name, target_description, 
 
         sleep_with_check(check_interval, stop_flag) #sleep for check interval if stop flag is not set
 
-if __name__ == "__main__":
-    gpt_model = "gpt-4-1106-preview" #set GPT model
+# if __name__ == "__main__":
+#     gpt_model = "gpt-4-1106-preview" #set GPT model
     # gpt_model = "gpt-4" #set GPT model
     # gpt_model = "gpt-3.5-turbo-1106" #set GPT model
     # converse_with_AI_name(target_name="Frank Minosh", user_name = "Josh Rizika" , target_description="grandpa", words_per_minute=2000, gpt_model=gpt_model)
