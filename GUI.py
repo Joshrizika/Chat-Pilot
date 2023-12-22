@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
 from PyQt5.QtCore import Qt
+from PyQt5 import QtCore
+from PyQt5.QtGui import QTextCursor
 import sys
 import subprocess
 import json
@@ -68,6 +70,12 @@ class ThreadItemWidget(QWidget):
     def mouseDoubleClickEvent(self, event):
         # Signal to show detailed information
         self.double_click_callback(self)
+
+class EmittingStream(QtCore.QObject):
+    textWritten = QtCore.pyqtSignal(str)
+
+    def write(self, text):
+        self.textWritten.emit(str(text))
 
 class App(QMainWindow):
     def __init__(self):
@@ -200,6 +208,10 @@ class App(QMainWindow):
         self.detailed_text_area.hide()
         self.right_side_layout.addWidget(self.detailed_text_area)
 
+        self.console_output_area = QTextEdit(self)
+        self.console_output_area.setReadOnly(True)
+        self.console_output_area.hide()
+        self.right_side_layout.addWidget(self.console_output_area)
 
         main_layout.addLayout(self.right_side_layout, 3)
         self.tab1.setLayout(main_layout)
@@ -278,11 +290,19 @@ class App(QMainWindow):
         self.detailed_text_area.setHtml(thread_widget.get_detailed_info())
         self.detailed_text_area.show()
 
+        # Redirect the standard output to the console_output_area
+        sys.stdout = EmittingStream(textWritten=self.append_text_to_console_output)
+        self.console_output_area.show()
+
+    def append_text_to_console_output(self, text):
+        self.console_output_area.moveCursor(QTextCursor.End)
+        self.console_output_area.insertPlainText(text)
+
     def return_to_thread_list(self):
         # Hide the detailed text area
         self.return_to_thread_list_button.hide()
         self.detailed_text_area.hide()
-
+        self.console_output_area.hide()
 
         self.thread_list_widget.show()
         self.submit_button.show()

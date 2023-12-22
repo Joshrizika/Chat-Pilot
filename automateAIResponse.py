@@ -64,7 +64,6 @@ def get_recent_messages(target_number, last_id_checked):
 # parameters: target_number - string, last_id_checked - int, pattern - string
 # returns: list of messages
 def postprocess_messages(messages):
-    # print("messages: ", messages)
     pattern = r'^(Loved|Liked|Disliked|Laughed at|Emphasized) “.*”$' #define pattern to check for reactions
     processed_messages = [] #create messages list
     for message in messages: #for each message in recent messages
@@ -79,7 +78,6 @@ def postprocess_messages(messages):
                     processed_messages.append((message_id, "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", is_media, file_type, filepath)) #add excuse for video to messages
             else: #if message is not media
                 processed_messages.append((message_id, text, is_media, file_type, filepath)) #add message to messages
-    # print("processed messages: ", processed_messages)
     return processed_messages #return messages
 
 # function: generate a response from GPT
@@ -103,7 +101,7 @@ def generate_response(incoming_message, conversation_history, user_name, recipie
     questioned_text = re.search(pattern, incoming_message) #search for questioned text
     if questioned_text: #if questioned text is found
         questioned_text = questioned_text.group(1) #get questioned text
-        print("questioned_text: ", questioned_text)
+        print(f"questioned_text: {questioned_text}\n")
         incoming_message = re.sub(pattern, f"I don't understand your previous text... {questioned_text}. Can you please provide more information?", incoming_message) #rephrase incoming message
     
     messages.append({"role": "user", "content": incoming_message}) #add incoming message
@@ -116,7 +114,7 @@ def generate_response(incoming_message, conversation_history, user_name, recipie
     response = completion.choices[0].message.content #get response from GPT
 
     if gpt_model_number == 3.5 and "AI" in response: #if GPT-3.5 and response contains AI
-        print("AI detected in response. Rephrasing...")
+        print("AI detected in response. Rephrasing...\n")
         new_message = f"Your message ({response}) refers to AI. Please remember to maintain the persona of a human responder in our conversation. If you're indicating that you are an AI, kindly rephrase your message to exclude this information." #rephrase response
         messages.append({"role": "assistant", "content": new_message}) #add rephrased response to messages
         completion = client.chat.completions.create( #generate response from GPT
@@ -208,11 +206,11 @@ def generate_image_description(filepath):
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) #generate response from GPT
 
     response_data = response.json() #get json response data
-    print("response_data: ", response_data)
-    message_content = response_data['choices'][0]['message']['content'] #get message content from response data
-    formatted_message_content = "Imagine you are directly looking at an image described as follows: '" + message_content.replace('\n', ' ') + "'. Please provide a brief and concise reaction to the image as if you were seeing it yourself, keeping your response short."
+    image_desciption = response_data['choices'][0]['message']['content'] #get message content from response data
+    print(f"image_desciption: {image_desciption}\n")
+    formatted_image_description = "Imagine you are directly looking at an image described as follows: '" + image_desciption.replace('\n', ' ') + "'. Please provide a brief and concise reaction to the image as if you were seeing it yourself, keeping your response short."
 
-    return formatted_message_content #return formatted message content
+    return formatted_image_description #return formatted image description
 
 def sleep_with_check(sleep_time, stop_flag):
     elapsed_time = 0
@@ -225,66 +223,72 @@ def sleep_with_check(sleep_time, stop_flag):
 # returns: nothing
 def converse_with_AI(target_number, target_name, user_name, target_description, words_per_minute, conversation_context, gpt_model, stop_flag):
     CONVERSATION_HISTORY = [] #create conversation history
-    print("listening for messages from {}".format(target_number))
+    print(f"listening for messages from {target_number}\n")
     last_id_checked = get_last_message_id() #get id of last message
+    check_interval = 5 #set check interval
 
-    while not stop_flag.is_set(): #loop forever
-        check_interval = 5 #set check interval
+    while not stop_flag.is_set(): #loop until stop flag is set
         start_time = time.time() #get start time
         messages = get_recent_messages(target_number, last_id_checked) #get recent messages
         if len(messages) > 0: #if there are new messages
             concatenated_text = ' '.join([row[1] for row in messages[::-1]]) #concatenate messages
-            print("concatenated_text: ", concatenated_text)
+            print(f"concatenated_text: {concatenated_text}\n")
 
-            print("generating ai response...")
+            print("generating ai response...\n")
             response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, conversation_context, gpt_model) #generate response
-            response_generation_time = time.time() - start_time #calculate response generation time
-            print("response_message: ", response_message)
-            print("response_generation_time: ", response_generation_time)
+            print(f"response_message: {response_message}\n")
 
+            response_generation_time = time.time() - start_time #calculate response generation time
+            print(f"response_generation_time: {response_generation_time}")
             response_time = get_response_time(response_message, words_per_minute) #get response time
-            print("response_time: ", response_time)
+            print(f"response_time: {response_time}")
             wait_time = response_time - response_generation_time #get wait time
             if wait_time < 0: #if response time is negative
                 wait_time = 0
             total_time_waited = wait_time + response_generation_time#set total time waited
-            print("Sleeping for", wait_time, "seconds")
+            print(f"Sleeping for {wait_time} seconds\n")
             sleep_with_check(wait_time, stop_flag) #sleep for response time if stop flag is not set
 
             if stop_flag.is_set():
                 break
-            print("checking for new messages...")
+            print("checking for new messages...\n")
             start_time = time.time() #get start time
             new_messages = get_recent_messages(target_number, last_id_checked) #get recent messages
             while len(new_messages) > len(messages): #while there are new messages
-                print("new message received")
+                print("new message received\n")
                 messages = new_messages #update messages
                 concatenated_text = ' '.join([row[1] for row in messages[::-1]]) #concatenate messages
-                print("new concatenated_text: ", concatenated_text)
+                print(f"new concatenated_text: {concatenated_text}\n")
 
-                print("generating new ai response...")
+                print("generating new ai response...\n")
                 response_message = generate_response(concatenated_text, CONVERSATION_HISTORY, user_name, target_name, target_description, conversation_context, gpt_model) #generate response
-                response_generation_time = time.time() - start_time #calculate response generation time
+                print(f"new response_message: {response_message}\n")
+                
+                if stop_flag.is_set(): #if stop flag is set
+                    break #break out of loop
 
-                if stop_flag.is_set():
-                    break
-                wait_time = get_response_time(response_message, words_per_minute) - response_generation_time #get response time
+                response_generation_time = time.time() - start_time #calculate response generation time
+                print(f"response_generation_time: {response_generation_time}")
+                response_time = get_response_time(response_message, words_per_minute) #get response time
+                print(f"response_time: {response_time}")
+                wait_time = response_time - response_generation_time #get response time
                 if wait_time < 0: #if response time is negative
-                    wait_time = 0
+                    wait_time = 0 #wait for 0 seconds
+                print(f"already waited {total_time_waited} seconds")
                 remaining_wait_time = wait_time - total_time_waited #calculate wait time
                 if remaining_wait_time < 0: #if wait time is negative
                     remaining_wait_time = 0 #wait for 0 seconds
                 total_time_waited += remaining_wait_time + response_generation_time #update total time waited
-                print("Sleeping for", remaining_wait_time, "seconds")
+                print(f"Sleeping for {remaining_wait_time} seconds\n")
                 sleep_with_check(remaining_wait_time, stop_flag) #sleep for response time if stop flag is not set
 
                 if stop_flag.is_set():
                     break
-                print("checking for new messages...")
+                print("checking for new messages...\n")
                 start_time = time.time() #get start time
                 new_messages = get_recent_messages(target_number, last_id_checked) #get recent messages
-            print("sending message responding to", concatenated_text)
-            print("response_message: ", response_message)
+            print(f"sending message responding to {concatenated_text}\n")
+            print(f"response_message: {response_message}\n")
             os.system(f'osascript sendMessage.applescript "{target_number}" "{response_message}"') #send response message         
             last_id_checked = messages[0][0] #update last id checked
 
