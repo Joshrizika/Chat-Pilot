@@ -1,7 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5 import QtCore
-from PyQt5.QtGui import QTextCursor
 import sys
 import subprocess
 import json
@@ -101,6 +100,11 @@ class App(QMainWindow):
 
         self.running_threads = []
 
+        self.current_output_buffer = None
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.update_console_output_area)
+        self.update_timer.start(1000)  # Update every 1000 milliseconds (1 second)
+
     def create_contact_list(self, tab_name):
         # Create a group box for the contact list and search box
         contact_list_group = QGroupBox("Contacts")
@@ -114,13 +118,16 @@ class App(QMainWindow):
 
         contact_list = QListWidget()
         contact_list.addItems(sorted(self.contacts.keys()))
-        contact_list.itemClicked.connect(lambda item: self.contact_selected(item, tab_name))
+
+        # Connect the currentRowChanged signal to a lambda that calls contact_selected
+        contact_list.currentRowChanged.connect(
+            lambda row: self.contact_selected(contact_list.item(row), tab_name)
+        )
 
         layout.addWidget(search_box)
         layout.addWidget(contact_list)
 
         return contact_list_group
-
 
     def filter_contacts(self, text, contact_list):
         contact_list.clear()
@@ -128,10 +135,10 @@ class App(QMainWindow):
         contact_list.addItems(filtered_contacts)
 
     def contact_selected(self, item, tab_name):
-        contact_name = item.text()
-        self.contact_info[tab_name] = (contact_name, self.contacts[contact_name])
-        # print(f"Selected number for {tab_name}: {self.contact_info[tab_name][1]}")
-        # print(f"Selected name for {tab_name}: {self.contact_info[tab_name][0]}")
+        if item is not None:
+            contact_name = item.text()
+            self.contact_info[tab_name] = (contact_name, self.contacts[contact_name])
+
 
     def tab1_layout(self):
         main_layout = QHBoxLayout()
@@ -162,7 +169,8 @@ class App(QMainWindow):
         description_group.setLayout(description_layout)
         inputs_layout.addWidget(description_group)
 
-        wpm_group = QGroupBox("Response Speed (Words Per Minute)")
+        wpm_group = QGroupBox("Response Speed (WPM)")
+        wpm_group.setFixedWidth(140)
         wpm_layout = QVBoxLayout()
         self.wpm_input = QSpinBox()
         self.wpm_input.setRange(10, 200)
@@ -205,8 +213,13 @@ class App(QMainWindow):
 
         self.detailed_text_area = QTextEdit(self)
         self.detailed_text_area.setReadOnly(True)
+        self.detailed_text_area.setFixedHeight(110)
         self.detailed_text_area.hide()
         self.right_side_layout.addWidget(self.detailed_text_area)
+
+        self.console_output_label = QLabel("Console Output", self)
+        self.console_output_label.hide()
+        self.right_side_layout.addWidget(self.console_output_label)
 
         self.console_output_area = QTextEdit(self)
         self.console_output_area.setReadOnly(True)
@@ -229,7 +242,6 @@ class App(QMainWindow):
         self.conversation_context = self.context_input.toPlainText()
         if self.conversation_context == "":
             self.conversation_context = None
-        print(f"context: {self.conversation_context}")
         target_name = self.contact_info['tab1'][0]
 
 
@@ -261,26 +273,41 @@ class App(QMainWindow):
             "conversation_context": self.conversation_context
         }
         stop_flag = threading.Event()
-        thread = threading.Thread(target=self.ai_conversation, args=(stop_flag,))
+        output_buffer = []
+        thread = threading.Thread(target=self.ai_conversation, args=(stop_flag, output_buffer))
         thread.daemon = True
         thread.start()
+        thread_info['output_buffer'] = output_buffer
         self.running_threads.append((thread, stop_flag, thread_info))
         self.update_thread_list()
 
-    def ai_conversation(self, stop_flag):
+    def ai_conversation(self, stop_flag, output_buffer):
         # Call the modified converse_with_AI function with the stop flag
-        converse_with_AI(self.contact_info['tab1'][1], self.contact_info['tab1'][0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag)
+        converse_with_AI(self.contact_info['tab1'][1], self.contact_info['tab1'][0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag, output_buffer)
 
     def stop_conversation(self, thread_index):
         if 0 <= thread_index < len(self.running_threads):
             # Correct the unpacking to match the new structure of the tuples
             _, stop_flag, _ = self.running_threads[thread_index]  # Adding an extra underscore for the thread info
             stop_flag.set()  # Trigger the stop flag
+            self.current_output_buffer = None
             self.running_threads.pop(thread_index)  # Remove the stopped thread
-            print(f"Stopping thread {thread_index+1}")
             self.update_thread_list()  # Update the GUI immediately
 
     def show_detailed_info(self, thread_widget):
+        # Find the QListWidgetItem associated with the ThreadItemWidget
+        thread_index = -1
+        for i in range(self.thread_list_widget.count()):
+            item = self.thread_list_widget.item(i)
+            if self.thread_list_widget.itemWidget(item) == thread_widget:
+                thread_index = i
+                break
+
+        if thread_index == -1:
+            # Handle the case where the thread widget is not found
+            QMessageBox.warning(self, "Error", "Thread not found.")
+            return
+
         self.thread_list_widget.hide()
         self.submit_button.hide()
 
@@ -290,30 +317,41 @@ class App(QMainWindow):
         self.detailed_text_area.setHtml(thread_widget.get_detailed_info())
         self.detailed_text_area.show()
 
-        # Redirect the standard output to the console_output_area
-        sys.stdout = EmittingStream(textWritten=self.append_text_to_console_output)
+        _, _, thread_info = self.running_threads[thread_index]
+        self.current_output_buffer = thread_info['output_buffer']
+        self.update_console_output_area()
+
+        self.console_output_label.show()
         self.console_output_area.show()
 
-    def append_text_to_console_output(self, text):
-        self.console_output_area.moveCursor(QTextCursor.End)
-        self.console_output_area.insertPlainText(text)
+    def update_console_output_area(self):
+        # Save the scrollbar position
+        scrollbar = self.console_output_area.verticalScrollBar()
+        scrollbar_position = scrollbar.value()
+
+        if self.current_output_buffer:
+            self.console_output_area.setPlainText('\n'.join(self.current_output_buffer))
+
+        # Restore the scrollbar position
+        scrollbar.setValue(scrollbar_position)
 
     def return_to_thread_list(self):
         # Hide the detailed text area
         self.return_to_thread_list_button.hide()
         self.detailed_text_area.hide()
+        self.console_output_label.hide()
         self.console_output_area.hide()
 
         self.thread_list_widget.show()
         self.submit_button.show()
-
 
     def update_thread_list(self):
         self.thread_list_widget.clear()
         for i, (thread, _, thread_info) in enumerate(self.running_threads):
             if thread.is_alive():
                 item = QListWidgetItem(self.thread_list_widget)
-                widget = ThreadItemWidget(**thread_info, stop_callback=lambda: self.stop_conversation(i), double_click_callback=self.show_detailed_info, parent=self.thread_list_widget)
+                relevant_thread_info = {k: v for k, v in list(thread_info.items())[:-1]}
+                widget = ThreadItemWidget(**relevant_thread_info, stop_callback=lambda _, i=i: self.stop_conversation(i), double_click_callback=self.show_detailed_info, parent=self.thread_list_widget)               
                 item.setSizeHint(widget.sizeHint())
                 self.thread_list_widget.addItem(item)
                 self.thread_list_widget.setItemWidget(item, widget)
@@ -325,7 +363,7 @@ class App(QMainWindow):
         left_side_layout = QVBoxLayout()
 
         # Contact List
-        contact_list_group = self.create_contact_list("tab1")
+        contact_list_group = self.create_contact_list("tab2 ")
         left_side_layout.addWidget(contact_list_group)
 
         # Add left side layout to main layout
