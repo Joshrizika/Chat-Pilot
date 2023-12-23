@@ -82,7 +82,7 @@ def postprocess_messages(messages, output_buffer):
                     elif file_type.startswith("video"):
                         processed_messages.append((message_id, "Imagine you've received a video message from a friend, but you're currently unable to watch it. Craft a polite and believable excuse explaining why you can't watch the video right now.", is_media, file_type, filepath)) #add excuse for video to messages
                 elif filepath.endswith(".caf"):
-                    processed_messages.append((message_id, generate_audio_description(filepath, output_buffer), is_media, file_type, filepath)) #add audio description to messages
+                    processed_messages.append((message_id, generate_audio_transcript(filepath, output_buffer), is_media, file_type, filepath)) #add audio description to messages
             else: #if message is not media
                 processed_messages.append((message_id, text, is_media, file_type, filepath)) #add message to messages
     return processed_messages #return messages
@@ -131,10 +131,14 @@ def generate_response(incoming_message, conversation_history, user_name, recipie
     
     messages.append({"role": "user", "content": incoming_message}) #add incoming message
 
-    completion = client.chat.completions.create( #generate response from GPT
-        model=gpt_model, #use gpt_model
-        messages=messages #use compiled messages as prompt
-    )
+    try:
+        completion = client.chat.completions.create( #generate response from GPT
+            model=gpt_model, #use gpt_model
+            messages=messages #use compiled messages as prompt
+        )
+    except openai.BadRequestError as e:
+        output_buffer.append(f"OpenAI API error: {e}\n")
+        return None
 
     response = completion.choices[0].message.content #get response from GPT
 
@@ -142,10 +146,14 @@ def generate_response(incoming_message, conversation_history, user_name, recipie
         output_buffer.append("AI detected in response. Rephrasing...\n")
         new_message = f"Your message ({response}) refers to AI. Please remember to maintain the persona of a human responder in our conversation. If you're indicating that you are an AI, kindly rephrase your message to exclude this information." #rephrase response
         messages.append({"role": "assistant", "content": new_message}) #add rephrased response to messages
-        completion = client.chat.completions.create( #generate response from GPT
-            model=gpt_model, #use gpt_model
-            messages=messages #use compiled messages as prompt
-        )
+        try:
+            completion = client.chat.completions.create( #generate response from GPT
+                model=gpt_model, #use gpt_model
+                messages=messages #use compiled messages as prompt
+            )
+        except openai.BadRequestError as e:
+            output_buffer.append(f"OpenAI API error: {e}\n")
+            return None
         response = completion.choices[0].message.content #get response from GPT
 
     conversation_history.append({"role": "user", "content": incoming_message}) #add incoming message to conversation history
@@ -227,8 +235,11 @@ def generate_image_description(filepath, output_buffer):
         }],
         "max_tokens": 1200 #set max tokens
     }
-
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) #generate response from GPT
+    try:
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) #generate response from GPT
+    except Exception as e:
+        output_buffer.append(f"OpenAI API error: {e}\n")
+        return None
 
     response_data = response.json() #get json response data
     image_desciption = response_data['choices'][0]['message']['content'] #get message content from response data
@@ -237,7 +248,10 @@ def generate_image_description(filepath, output_buffer):
 
     return formatted_image_description #return formatted image description
 
-def generate_audio_description(filepath, output_buffer):
+# function: generate a transcript for the inputted audio
+# parameters: filepath - string, output_buffer - list
+# returns: transcript text
+def generate_audio_transcript(filepath, output_buffer):
     client = openai.Client()  # Initialize the OpenAI client
 
     # Convert the CAF file to MP3 and save it to a temporary file
@@ -262,7 +276,6 @@ def generate_audio_description(filepath, output_buffer):
         output_buffer.append(f"OpenAI API error: {e}\n")
         return None
     finally:
-        # Clean up: Delete the temporary MP3 file
         os.remove(temp_mp3_file.name)
     
 # function: sleep for a given amount of time or until a stop flag is set
