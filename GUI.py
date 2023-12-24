@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5 import QtCore
 import sys
@@ -137,20 +137,13 @@ class App(QMainWindow):
         self.setGeometry(100, 100, 900, 600) #set window size and location
 
         self.contacts = get_contacts() or {} #get the contacts from the contacts file
-        self.contact_info = {"tab1": (None, None), "tab2": (None, None)} #set contact info dictionary
+        self.contact_info = (None, None) #set contact info to None
 
-        self.tabWidget = QTabWidget() #create tab widget
+        self.main_widget = QWidget() #create horizontal layout
 
-        self.tab1 = QWidget() #create tab 1
-        self.tab2 = QWidget() #create tab 2
+        self.create_layout() #create layout
 
-        self.tabWidget.addTab(self.tab1, "AI Conversation") #add tab 1 to tab widget
-        self.tabWidget.addTab(self.tab2, "Repeat Message") #add tab 2 to tab widget
-
-        self.tab1_layout() #set tab 1 layout
-        self.tab2_layout() #set tab 2 layout
-
-        self.setCentralWidget(self.tabWidget) #set tab widget as central widget
+        self.setCentralWidget(self.main_widget) #set main widget as central widget
 
         self.running_threads = [] #initialize list of tuples containing the thread, stop flag, and thread info
 
@@ -160,9 +153,9 @@ class App(QMainWindow):
         self.update_timer.start(1000)  #update every 1000 milliseconds (1 second)
 
     # function: create contact list
-    # parameters: self - App, tab_name - string
+    # parameters: self - App
     # returns: contact_list_group - QGroupBox
-    def create_contact_list(self, tab_name):
+    def create_contact_list(self):
         contact_list_group = QGroupBox("Contacts") #create group box for contact list
         layout = QVBoxLayout(contact_list_group) #create vertical layout for group box
 
@@ -176,7 +169,7 @@ class App(QMainWindow):
         contact_list.addItems(sorted(self.contacts.keys())) #add contacts to contact list
 
         contact_list.currentRowChanged.connect( #connect current row changed signal to contact_selected
-            lambda row: self.contact_selected(contact_list.item(row), tab_name) #call contact_selected in lambda function
+            lambda row: self.contact_selected(contact_list.item(row)) #call contact_selected in lambda function
         )
 
         layout.addWidget(search_box) #add search box to layout
@@ -193,21 +186,33 @@ class App(QMainWindow):
         contact_list.addItems(filtered_contacts) #add filtered contacts to contact list
 
     # function: get selected contact
-    # parameters: self - App, item - QListWidgetItem, tab_name - string
+    # parameters: self - App, item - QListWidgetItem
     # returns: nothing
-    def contact_selected(self, item, tab_name):
+    def contact_selected(self, item):
         if item: #if item is not None
             contact_name = item.text() #get contact name
-            self.contact_info[tab_name] = (contact_name, self.contacts[contact_name]) #set contact info for tab
+            self.contact_info = (contact_name, self.contacts[contact_name]) #set contact info to contact name and contact number
     
-    # function: set up tab 1 layout
+    # function: set up layout
     # parameters: self - App
     # returns: nothing
-    def tab1_layout(self):
+    def create_layout(self):
+        window_layout = QVBoxLayout() #create vertical layout
+
+        # Title
+        title = QLabel("Automated AI Conversations") #create title
+        title.setAlignment(Qt.AlignCenter) #set alignment for title to center
+        font = title.font() #get font for title
+        font.setBold(True) #set font to bold
+        font.setPointSize(20) #set font size to 20
+        title.setFont(font) #set font for title
+        window_layout.addWidget(title) #add title to window layout
+
         main_layout = QHBoxLayout() #create horizontal layout
+        
         left_side_layout = QVBoxLayout() #create vertical layout for left side
         
-        # User name
+        # User Name
         name_group = QGroupBox("Your Name") #create group box for name input
         name_layout = QVBoxLayout() #create vertical layout for group box
         self.name_input = QLineEdit() #create line edit for name input
@@ -216,7 +221,7 @@ class App(QMainWindow):
         name_group.setLayout(name_layout) #set layout for group box
         left_side_layout.addWidget(name_group) #add group box to left side layout
 
-        contact_list_group = self.create_contact_list("tab1") #create contact list group
+        contact_list_group = self.create_contact_list() #create contact list group
         left_side_layout.addWidget(contact_list_group) #add contact list group to left side layout
 
         main_layout.addLayout(left_side_layout, 1) #add left side layout to main layout
@@ -300,7 +305,10 @@ class App(QMainWindow):
         self.right_side_layout.addWidget(self.console_output_area) #add console output text edit to right side layout
 
         main_layout.addLayout(self.right_side_layout, 3) #add right side layout to main layout
-        self.tab1.setLayout(main_layout) #set main layout for tab 1
+
+        window_layout.addLayout(main_layout) #add main layout to window layout
+
+        self.main_widget.setLayout(window_layout) #set main layout
     
     #function: enter key press event handler
     #parameters: self - App, event - QKeyEvent
@@ -330,7 +338,7 @@ class App(QMainWindow):
         if self.conversation_context == "": #if conversation context is empty
             self.conversation_context = None #set conversation context to None
 
-        target_name = self.contact_info['tab1'][0] #get target name
+        target_name = self.contact_info[0] #get target name
         if not target_name: #if target name is None
             QMessageBox.warning(self, "Error", "Please select a recipient.") #show error message
             return
@@ -361,7 +369,7 @@ class App(QMainWindow):
     # parameters: self - App, stop_flag - threading.Event, output_buffer - list
     # returns: nothing
     def ai_conversation(self, stop_flag, output_buffer):
-        converse_with_AI(self.contact_info['tab1'][1], self.contact_info['tab1'][0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag, output_buffer) #call converse_with_AI
+        converse_with_AI(self.contact_info[1], self.contact_info[0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag, output_buffer) #call converse_with_AI
 
     # function: stop conversation
     # parameters: self - App, thread_index - int
@@ -441,21 +449,6 @@ class App(QMainWindow):
                 item.setSizeHint(widget.sizeHint()) #set size hint for item
                 self.thread_list_widget.addItem(item) #add item to thread list widget
                 self.thread_list_widget.setItemWidget(item, widget) #set widget for item
-
-    def tab2_layout(self):
-        main_layout = QHBoxLayout()
-
-        # Left side layout
-        left_side_layout = QVBoxLayout()
-
-        # Contact List
-        contact_list_group = self.create_contact_list("tab2 ")
-        left_side_layout.addWidget(contact_list_group)
-
-        # Add left side layout to main layout
-        main_layout.addLayout(left_side_layout, 1)
-
-        self.tab2.setLayout(main_layout)
     
 def main():
     app = QApplication(sys.argv) #create application
