@@ -1,4 +1,3 @@
-```markdown
 # Project Title
 
 This project is a GUI application that automates responses using AI. It fetches contacts using a Swift script and sends automated responses.
