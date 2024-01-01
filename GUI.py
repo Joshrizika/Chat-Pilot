@@ -156,7 +156,7 @@ class App(QMainWindow):
     # parameters: self - App
     # returns: contact_list_group - QGroupBox
     def create_contact_list(self):
-        contact_list_group = QGroupBox("Contacts") #create group box for contact list
+        contact_list_group = QGroupBox("Recipient") #create group box for contact list
         layout = QVBoxLayout(contact_list_group) #create vertical layout for group box
 
         contact_list = CustomListWidget(None) #create list widget for contact list
@@ -231,7 +231,7 @@ class App(QMainWindow):
         inputs_layout = QHBoxLayout() #create horizontal layout for inputs
         
         # Relation Description
-        description_group = QGroupBox("Relation to Contact") #create group box for relation description input
+        description_group = QGroupBox("Relation to Recipient") #create group box for relation description input
         description_layout = QVBoxLayout() #create vertical layout for group box
         self.description_input = QLineEdit() #create line edit for relation description input
         self.description_input.setPlaceholderText("e.g. Sister, Cousin, etc.") #set placeholder text for relation description input
