@@ -4,7 +4,10 @@ This project is a GUI application that automates responses using AI. It fetches 
 
 ## Getting Started
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+Save your OpenAI API key as an environment variable.  
+Follow Step 2 of this tutorial
+https://platform.openai.com/docs/quickstart?context=python
+
 
 ### Prerequisites
 
