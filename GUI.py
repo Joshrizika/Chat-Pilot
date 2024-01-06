@@ -1,11 +1,14 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy, QTabWidget
+from PyQt5.QtGui import QRegExpValidator
+from PyQt5.QtCore import Qt, QTimer, QRegExp
 from PyQt5 import QtCore
 import sys
 import subprocess
 import json
 from automateAIResponse import converse_with_AI
 import threading
+import phonenumbers
+from phonenumbers import NumberParseException, PhoneNumberFormat
 
 # function: compile swift script that fetches contacts
 # parameters: swift_file - string, executable_name - string
@@ -38,7 +41,7 @@ class ThreadItemWidget(QWidget):
     # function: constructor
     # parameters: relation_description - string, recipient - string, user_name - string, model - string, words_per_minute - int, conversation_context - string, stop_callback - function, double_click_callback - function, parent - QWidget
     # returns: nothing
-    def __init__(self, relation_description, recipient, user_name, model, words_per_minute, conversation_context, stop_callback, double_click_callback, parent=None): 
+    def __init__(self, relation_description, recipient, recipient_number, user_name, model, words_per_minute, conversation_context, stop_callback, double_click_callback, parent=None): 
         super().__init__(parent)
         self.layout = QHBoxLayout(self) #create horizontal layout
         self.double_click_callback = double_click_callback #set double click callback
@@ -47,7 +50,7 @@ class ThreadItemWidget(QWidget):
         self.label = QLabel(self.basic_info) #create label with basic info
         self.layout.addWidget(self.label) #add label to layout
 
-        self.detailed_info = (recipient, relation_description, user_name, conversation_context, words_per_minute, model) #set detailed info tuple
+        self.detailed_info = (recipient, recipient_number, relation_description, user_name, conversation_context, words_per_minute, model) #set detailed info tuple
 
         self.layout.addStretch(1) #add stretch to push buttons to the right
 
@@ -59,17 +62,34 @@ class ThreadItemWidget(QWidget):
     # parameters: self - ThreadItemWidget
     # returns: detailed_info - string
     def get_detailed_info(self):
-        recipient, relation_description, user_name, conversation_context, words_per_minute, model = self.detailed_info #unpack detailed info tuple
-        
+        recipient, recipient_number, relation_description, user_name, conversation_context, words_per_minute, model = self.detailed_info #unpack detailed info tuple
+
         detailed_info = ( #set detailed info string as html
             f"<b>Your name:</b> {user_name}<br>"
             f"<b>Recipient name:</b> {recipient}<br>"
+            f"<b>Recipient number:</b> {self.format_phone_number(recipient_number)}<br>" #format phone number
             f"<b>Relationship:</b> {relation_description}<br>"
             f"<b>Conversation context:</b> {conversation_context}<br>"
             f"<b>Response Speed (WPM):</b> {words_per_minute}<br>"
             f"<b>GPT Model:</b> {model}"
         ) 
         return detailed_info
+    
+    # function: format phone number
+    # parameters: self - ThreadItemWidget, number - string
+    # returns: formatted_number - string
+    def format_phone_number(self, number):
+        try: 
+            if number.startswith('+'): #if number includes a country code
+                phone_number = phonenumbers.parse(number, None) #parse phone number
+                return phonenumbers.format_number(phone_number, PhoneNumberFormat.INTERNATIONAL) #format phone number
+            else: #if number does not include a country code
+                if len(number) == 10 and number.isdigit(): #if number is 10 digits
+                    return f"{number[:3]}-{number[3:6]}-{number[6:]}" #format number as xxx-xxx-xxxx
+                else: #if number is not 10 digits
+                    return number #return number as is
+        except NumberParseException: #if number is invalid
+            return number #return number as is
 
     # function: mouse double click event handler
     # parameters: self - ThreadItemWidget, event - QMouseEvent
@@ -156,8 +176,10 @@ class App(QMainWindow):
     # parameters: self - App
     # returns: contact_list_group - QGroupBox
     def create_contact_list(self):
-        contact_list_group = QGroupBox("Recipient") #create group box for contact list
-        layout = QVBoxLayout(contact_list_group) #create vertical layout for group box
+        tab_widget = QTabWidget() #create a tab widget
+
+        #Contacts Tab
+        layout = QVBoxLayout() #create vertical layout for group box
 
         contact_list = CustomListWidget(None) #create list widget for contact list
         search_box = CustomLineEdit(contact_list) #create line edit for search box
@@ -165,7 +187,7 @@ class App(QMainWindow):
         search_box.setPlaceholderText("Search contacts...") #set placeholder text for search box
         search_box.textChanged.connect(lambda text: self.filter_contacts(text, contact_list)) #connect text changed signal to filter_contacts
 
-        contact_list.search_box = search_box  # Set reference to search box in the list widget
+        contact_list.search_box = search_box #set reference to search box in the list widget
         contact_list.addItems(sorted(self.contacts.keys())) #add contacts to contact list
 
         contact_list.currentRowChanged.connect( #connect current row changed signal to contact_selected
@@ -175,7 +197,56 @@ class App(QMainWindow):
         layout.addWidget(search_box) #add search box to layout
         layout.addWidget(contact_list) #add contact list to layout
 
-        return contact_list_group
+        contacts_widget = QWidget() #create a widget for the contacts tab
+        contacts_widget.setLayout(layout) #set the layout of the widget
+
+        tab_widget.addTab(contacts_widget, "Contacts") #add the contacts widget as the first tab
+
+        # Input Tab
+        layout = QVBoxLayout() #create vertical layout for group box
+
+        # Name input
+        name_label = QLabel("Name:") #create label for name input
+        name_input = QLineEdit() #create line edit for name input
+        name_input.setPlaceholderText("Enter recipient name") #set placeholder text for name input
+        name_input.textChanged.connect(lambda text: self.update_contact_info(name=text)) #connect text changed signal to update_contact_info
+        name_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed) #make name_input expand horizontally
+
+        # Phone input
+        phone_label = QLabel("Phone Number:") #create label for phone input
+        phone_input = QLineEdit() #create line edit for phone input
+        phone_input.setPlaceholderText("+X (XXX) XXX-XXXX")
+        phone_regex = QRegExp("^\\+?[0-9]{1,15}$") #create regex for phone input
+        phone_validator = QRegExpValidator(phone_regex) #create validator for phone input
+        phone_input.setValidator(phone_validator) #set validator for phone input
+        phone_input.textChanged.connect(lambda text: self.update_contact_info(phone=text)) #connect text changed signal to update_contact_info
+        phone_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed) #make phone_input expand horizontally
+
+        # Add labels and line edits to layout
+        layout.addWidget(name_label) #add name label to layout
+        layout.addWidget(name_input) #add name input to layout
+        layout.addWidget(phone_label) #add phone label to layout
+        layout.addWidget(phone_input) #add phone input to layout
+
+        layout.addStretch(1) #add a stretch at the end of the layout
+
+        input_widget = QWidget() #create a widget for the input tab
+        input_widget.setLayout(layout) #set the layout of the widget
+
+        tab_widget.addTab(input_widget, "Input Number") #add the input widget as the second tab
+
+        tab_widget.currentChanged.connect(lambda index: self.update_contact_info(name=name_input.text(), phone=phone_input.text()) if index == 1 else setattr(self, 'contact_info', (None, None))) #connect current changed signal to update_contact_info if the second tab is selected or set contact info to None if the first tab is selected
+
+        return tab_widget
+
+    # function: update contact info
+    # parameters: self - App, name - string, phone - string
+    # returns: nothing
+    def update_contact_info(self, name=None, phone=None):
+        if name is not None: #if name is not None
+            self.contact_info = (name, self.contact_info[1]) #update the name in self.contact_info
+        if phone is not None: #if phone is not None
+            self.contact_info = (self.contact_info[0], phone) #update the phone number in self.contact_info
 
     # function: filter contacts
     # parameters: self - App, text - string, contact_list - QListWidget
@@ -221,8 +292,9 @@ class App(QMainWindow):
         name_group.setLayout(name_layout) #set layout for group box
         left_side_layout.addWidget(name_group) #add group box to left side layout
 
-        contact_list_group = self.create_contact_list() #create contact list group
-        left_side_layout.addWidget(contact_list_group) #add contact list group to left side layout
+        # Recipient
+        recipient_group = self.create_contact_list() #create contact list group
+        left_side_layout.addWidget(recipient_group) #add contact list group to left side layout
 
         main_layout.addLayout(left_side_layout, 1) #add left side layout to main layout
 
@@ -231,7 +303,7 @@ class App(QMainWindow):
         inputs_layout = QHBoxLayout() #create horizontal layout for inputs
         
         # Relation Description
-        description_group = QGroupBox("Relation to Recipient") #create group box for relation description input
+        description_group = QGroupBox("Recipient Relationship to You") #create group box for relation description input
         description_layout = QVBoxLayout() #create vertical layout for group box
         self.description_input = QLineEdit() #create line edit for relation description input
         self.description_input.setPlaceholderText("e.g. Sister, Cousin, etc.") #set placeholder text for relation description input
@@ -290,7 +362,7 @@ class App(QMainWindow):
         # Detailed Info
         self.detailed_text_area = QTextEdit(self) #create text edit for detailed info
         self.detailed_text_area.setReadOnly(True) #set detailed info text edit to read only
-        self.detailed_text_area.setFixedHeight(110) #set fixed height for detailed info text edit
+        self.detailed_text_area.setFixedHeight(125) #set fixed height for detailed info text edit
         self.detailed_text_area.hide() #hide detailed info text edit
         self.right_side_layout.addWidget(self.detailed_text_area) #add detailed info text edit to right side layout
 
@@ -339,18 +411,28 @@ class App(QMainWindow):
             self.conversation_context = None #set conversation context to None
 
         target_name = self.contact_info[0] #get target name
-        if not target_name: #if target name is None
+        target_number = self.contact_info[1] #get target number
+        if not target_name and not target_number: #if target name and number is None
             QMessageBox.warning(self, "Error", "Please select a recipient.") #show error message
             return
-
+        elif not target_name and target_number: #if target name is None and target number is not None
+            QMessageBox.warning(self, "Error", "Please enter recipient name.") #show error message
+            return
+        elif target_name and not target_number: #if target name is not None and target number is None
+            QMessageBox.warning(self, "Error", "Please enter recipient phone number.") #show error message
+            return
+        
         for thread, _, thread_info in self.running_threads: #for each thread in running threads
-            if thread.is_alive() and thread_info['recipient'] == target_name: #if thread is alive and recipient is target name
-                QMessageBox.warning(self, "Error", f"A conversation with {thread_info['recipient']} is already in progress. Please choose a different contact.") #show error message
-                return 
+            if thread.is_alive():
+                if thread_info['recipient_number'] == target_number: #if thread is alive and recipient is target name
+                    QMessageBox.warning(self, "Error", f"A conversation with {thread_info['recipient_number']} is already in progress. Please choose a different contact.") #show error message
+                    return
+                
 
         thread_info = { #set thread info dictionary
             "relation_description": self.relation_description,
             "recipient": target_name,
+            "recipient_number": target_number,
             "user_name": self.user_name,
             "model": self.selected_model,
             "words_per_minute": self.words_per_minute,
