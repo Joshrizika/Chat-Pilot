@@ -143,7 +143,7 @@ def generate_response(incoming_message, conversation_history, user_name, recipie
     response = completion.choices[0].message.content #get response from GPT
 
     if "AI" in response: #if response contains AI
-        output_buffer.append("AI detected in response. Rephrasing...\n")
+        output_buffer.append(f"AI detected in response...\n\n {response}\n\n Rephrasing...\n")
         new_message = f"Your message ({response}) refers to AI. Please remember to maintain the persona of a human responder in our conversation. If you're indicating that you are an AI, kindly rephrase your message to exclude this information." #rephrase response
         messages.append({"role": "assistant", "content": new_message}) #add rephrased response to messages
         try:
