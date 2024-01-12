@@ -1,14 +1,15 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy, QTabWidget
-from PyQt5.QtGui import QRegExpValidator
-from PyQt5.QtCore import Qt, QTimer, QRegExp
-from PyQt5 import QtCore
-import sys
-import subprocess
-import json
-from automateAIResponse import converse_with_AI
-import threading
-import phonenumbers
 from phonenumbers import NumberParseException, PhoneNumberFormat
+from automateAIResponse import converse_with_AI
+from PyQt5.QtCore import Qt, QTimer, QRegExp
+from PyQt5.QtGui import QRegExpValidator
+from PyQt5 import QtCore
+import phonenumbers
+import subprocess
+import threading
+import json
+import sys
+
 
 # function: compile swift script that fetches contacts
 # parameters: swift_file - string, executable_name - string
@@ -215,7 +216,7 @@ class App(QMainWindow):
         # Phone input
         phone_label = QLabel("Phone Number:") #create label for phone input
         phone_input = QLineEdit() #create line edit for phone input
-        phone_input.setPlaceholderText("+X (XXX) XXX-XXXX")
+        phone_input.setPlaceholderText("+x (xxx) xxx-xxxx")
         phone_regex = QRegExp("^\\+?[0-9]{1,15}$") #create regex for phone input
         phone_validator = QRegExpValidator(phone_regex) #create validator for phone input
         phone_input.setValidator(phone_validator) #set validator for phone input
@@ -316,7 +317,7 @@ class App(QMainWindow):
         wpm_group.setFixedWidth(140) #set fixed width for group box
         wpm_layout = QVBoxLayout() #create vertical layout for group box
         self.wpm_input = QSpinBox() #create spin box for words per minute input
-        self.wpm_input.setRange(10, 200) #set range for words per minute input
+        self.wpm_input.setRange(10, 500) #set range for words per minute input
         self.wpm_input.setValue(80) #set default value for words per minute input
         wpm_layout.addWidget(self.wpm_input) #add words per minute input to layout
         wpm_group.setLayout(wpm_layout) #set layout for group box
@@ -500,12 +501,16 @@ class App(QMainWindow):
     def update_console_output_area(self):
         scrollbar = self.console_output_area.verticalScrollBar() #get the vertical scrollbar
         scrollbar_position = scrollbar.value() #get the scrollbar position
-
+        scrollbar_at_max = scrollbar_position == scrollbar.maximum() #check if the scrollbar is at its maximum position
+        
         if self.current_output_buffer: #if the current output buffer is not None
             self.console_output_area.setPlainText('\n'.join(self.current_output_buffer)) #set the console output area to the current output buffer
 
-        scrollbar.setValue(scrollbar_position) #set the scrollbar position to the previous position
-
+        if scrollbar_at_max: #if the scrollbar was at its maximum position
+            scrollbar.setValue(scrollbar.maximum()) #set the scrollbar to its new maximum position
+        else: #if the scrollbar was not at its maximum position
+            scrollbar.setValue(scrollbar_position) #set the scrollbar to its previous position
+            
     # function: return to thread list
     # parameters: self - App
     # returns: nothing
