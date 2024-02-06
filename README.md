@@ -1,6 +1,6 @@
 # Chat Pilot
 
-A GUI application that automates responses using AI. It fetches contacts using a Swift script and sends automated responses.
+A GUI application that automates iMessage responses using AI. It fetches contacts using a Swift script and sends automated responses when it receives a text.
 
 ## Getting Started
 
