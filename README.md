@@ -1,6 +1,6 @@
 # Chat Pilot
 
-This project is a GUI application that automates responses using AI. It fetches contacts using a Swift script and sends automated responses.
+A GUI application that automates responses using AI. It fetches contacts using a Swift script and sends automated responses.
 
 ## Getting Started
 
