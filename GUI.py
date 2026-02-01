@@ -9,6 +9,7 @@ import subprocess
 import threading
 import json
 import sys
+import os
 
 
 # function: compile swift script that fetches contacts
@@ -27,14 +28,23 @@ def compile_swift_script(swift_file, executable_name):
 # returns: contacts - dictionary
 def get_contacts(): 
     contacts_filename = 'ContactsFile' #name of storage file
-    compile_swift_script('FetchContacts.swift', contacts_filename) #compile swift script to fetch contacts
+    if not compile_swift_script('FetchContacts.swift', contacts_filename): #compile swift script to fetch contacts
+        return None
     try:
-        result = subprocess.run([f'./{contacts_filename}'], capture_output=True, text=True, check=True) #get contacts from local file
+        result = subprocess.run([f'./{contacts_filename}'], capture_output=True, text=True, check=True, cwd=os.path.dirname(os.path.abspath(__file__))) #get contacts from local file
         contacts_json = result.stdout #get contacts from result stdout
         sorted_contacts = dict(sorted(json.loads(contacts_json).items(), key=lambda x: x[0])) #sort contacts alphabetically
         return sorted_contacts
     except subprocess.CalledProcessError as e: #if error occurs during execution
-        print(f"Error: {e}") #print error
+        stdout = (e.stdout or '').strip() if e.stdout else ''
+        stderr = (e.stderr or '').strip() if e.stderr else ''
+        combined = f"{stdout} {stderr}".strip()
+        if 'Access to contacts was denied' in combined or (e.returncode == 1 and 'denied' in combined.lower()):
+            print("Error: Contacts access was denied. Grant access in System Settings → Privacy & Security → Contacts for this app (e.g. Terminal or Python).")
+        else:
+            print(f"Error: {e}")
+            if combined:
+                print(f"Details: {combined}")
         return None
     
 # class - widget for each thread in the list
