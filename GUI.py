@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy, QTabWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QListWidget, QLineEdit, QHBoxLayout, QSpinBox, QComboBox, QGroupBox, QPushButton, QListWidgetItem, QMessageBox, QTextEdit, QSizePolicy, QTabWidget, QCheckBox
 from phonenumbers import NumberParseException, PhoneNumberFormat
 from automateAIResponse import converse_with_AI
 from PyQt5.QtCore import Qt, QTimer, QRegExp
@@ -50,9 +50,9 @@ def get_contacts():
 # class - widget for each thread in the list
 class ThreadItemWidget(QWidget):
     # function: constructor
-    # parameters: relation_description - string, recipient - string, user_name - string, model - string, words_per_minute - int, conversation_context - string, stop_callback - function, double_click_callback - function, parent - QWidget
+    # parameters: relation_description - string, recipient - string, user_name - string, model - string, words_per_minute - int, last_message - string, conversation_context - string, stop_callback - function, double_click_callback - function, parent - QWidget
     # returns: nothing
-    def __init__(self, relation_description, recipient, recipient_number, user_name, model, words_per_minute, conversation_context, stop_callback, double_click_callback, parent=None): 
+    def __init__(self, relation_description, recipient, recipient_number, user_name, model, words_per_minute, last_message, conversation_context, stop_callback, double_click_callback, parent=None): 
         super().__init__(parent)
         self.layout = QHBoxLayout(self) #create horizontal layout
         self.double_click_callback = double_click_callback #set double click callback
@@ -350,10 +350,22 @@ class App(QMainWindow):
         self.context_input = QTextEdit() #create text edit for context input
         self.context_input.setPlaceholderText("Add any context you'd like to provide to the AI here. (optional)") #set placeholder text for context input
         self.context_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed) #set size policy for context input
-        self.context_input.setFixedHeight(100) #set fixed height for context input
+        self.context_input.setFixedHeight(58) #set fixed height for context input
         context_layout.addWidget(self.context_input) #add context input to layout
         context_group.setLayout(context_layout) #set layout for group box
         self.right_side_layout.addWidget(context_group) #add group box to right side layout
+
+        # Last Message Input
+        last_message_group = QGroupBox("Last Message") #create group box for last message input
+        last_message_layout = QHBoxLayout() # create horizontal layout for input and checkbox
+        self.last_message_input = QLineEdit() #create line edit for last message input
+        self.last_message_input.setPlaceholderText("Enter the last message you received from the recipient") #set placeholder text for last message input
+        self.last_message_checkbox = QCheckBox("Use last message") # create checkbox next to the input
+        self.last_message_checkbox.setChecked(False) # optionally check by default
+        last_message_layout.addWidget(self.last_message_input) #add last message input to horizontal layout
+        last_message_layout.addWidget(self.last_message_checkbox) #add checkbox to horizontal layout
+        last_message_group.setLayout(last_message_layout) #set layout for group box
+        self.right_side_layout.addWidget(last_message_group) #add group box to right side layout
 
         # Submit Button
         self.submit_button = QPushButton("Submit") #create submit button
@@ -417,6 +429,10 @@ class App(QMainWindow):
         
         self.words_per_minute = self.wpm_input.value() #get words per minute
         self.selected_model = self.model_selection.currentText() #get GPT model
+        if self.last_message_checkbox.isChecked(): #if last message checkbox is checked
+            self.last_message = self.last_message_input.text() #get last message
+        else: #if last message checkbox is not checked
+            self.last_message = None #set last message to None
         self.conversation_context = self.context_input.toPlainText() #get conversation context
         if self.conversation_context == "": #if conversation context is empty
             self.conversation_context = None #set conversation context to None
@@ -447,6 +463,7 @@ class App(QMainWindow):
             "user_name": self.user_name,
             "model": self.selected_model,
             "words_per_minute": self.words_per_minute,
+            "last_message": self.last_message,
             "conversation_context": self.conversation_context
         }
         stop_flag = threading.Event() #create stop flag
@@ -462,7 +479,7 @@ class App(QMainWindow):
     # parameters: self - App, stop_flag - threading.Event, output_buffer - list
     # returns: nothing
     def ai_conversation(self, stop_flag, output_buffer):
-        converse_with_AI(self.contact_info[1], self.contact_info[0], self.user_name, self.relation_description, self.words_per_minute, self.conversation_context, self.selected_model, stop_flag, output_buffer) #call converse_with_AI
+        converse_with_AI(self.contact_info[1], self.contact_info[0], self.user_name, self.relation_description, self.words_per_minute, self.last_message, self.conversation_context, self.selected_model, stop_flag, output_buffer) #call converse_with_AI
 
     # function: stop conversation
     # parameters: self - App, thread_index - int

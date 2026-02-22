@@ -297,10 +297,17 @@ def check_for_images(messages):
 # function: have a conversation with AI using a target name
 # parameters: target_name - string, target_description - string
 # returns: nothing
-def converse_with_AI(target_number, target_name, user_name, target_description, words_per_minute, conversation_context, gpt_model, stop_flag, output_buffer):
+def converse_with_AI(target_number, target_name, user_name, target_description, words_per_minute, last_message, conversation_context, gpt_model, stop_flag, output_buffer):
     CONVERSATION_HISTORY = [] #create conversation history
-    output_buffer.append(f"listening for messages from {target_number}\n")
     last_id_checked = get_last_message_id() #get id of last message
+
+    if last_message != None and last_message != "" and last_message != " " and not stop_flag.is_set():
+            output_buffer.append(f"responding to message {last_message}\n")
+            response_message = generate_response(last_message, CONVERSATION_HISTORY, user_name, target_name, target_description, conversation_context, gpt_model, False, output_buffer) #generate response
+            output_buffer.append(f"response_message: {response_message}\n")
+            os.system(f'osascript sendMessage.applescript "{target_number}" "{response_message}"')
+
+    output_buffer.append(f"listening for messages from {target_number}\n")
     check_interval = 5 #set check interval
     while not stop_flag.is_set(): #loop until stop flag is set
         start_time = time.time() #get start time
