@@ -7,7 +7,6 @@ A GUI application that automates iMessage responses using AI. It fetches contact
 Save your OpenAI API key as an environment variable.  
 Follow Step 2 of this tutorial... https://platform.openai.com/docs/quickstart?context=python
 
-
 ### Prerequisites
 
 - Python 3
