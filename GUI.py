@@ -33,14 +33,14 @@ def get_contacts():
     try:
         result = subprocess.run([f'./{contacts_filename}'], capture_output=True, text=True, check=True, cwd=os.path.dirname(os.path.abspath(__file__))) #get contacts from local file
         contacts_json = result.stdout #get contacts from result stdout
-        sorted_contacts = dict(sorted(json.loads(contacts_json).items(), key=lambda x: x[0])) #sort contacts alphabetically
-        return sorted_contacts
+        contacts = {name: number for name, number in json.loads(contacts_json).items() if name and name.strip()}
+        return dict(sorted(contacts.items(), key=lambda x: x[0])) #sort contacts alphabetically
     except subprocess.CalledProcessError as e: #if error occurs during execution
         stdout = (e.stdout or '').strip() if e.stdout else ''
         stderr = (e.stderr or '').strip() if e.stderr else ''
         combined = f"{stdout} {stderr}".strip()
         if 'Access to contacts was denied' in combined or (e.returncode == 1 and 'denied' in combined.lower()):
-            print("Error: Contacts access was denied. Grant access in System Settings → Privacy & Security → Contacts for this app (e.g. Terminal or Python).")
+            print(e)
         else:
             print(f"Error: {e}")
             if combined:
