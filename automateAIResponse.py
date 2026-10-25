@@ -242,7 +242,7 @@ def generate_image_description(filepath, output_buffer):
         return None
 
     response_data = response.json() #get json response data
-    print(response_data)
+    # print(response_data)
     image_desciption = response_data['choices'][0]['message']['content'] #get message content from response data
     output_buffer.append(f"image_desciption: {image_desciption}\n")
     formatted_image_description = "Imagine you are directly looking at an image described as follows: '" + image_desciption.replace('\n', ' ') + "'. Please provide a brief and concise reaction to the image as if you were seeing it yourself, keeping your response short."
