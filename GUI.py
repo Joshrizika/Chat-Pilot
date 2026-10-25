@@ -337,7 +337,7 @@ class App(QMainWindow):
         model_group = QGroupBox("GPT Model") #create group box for GPT model selection
         model_layout = QVBoxLayout() #create vertical layout for group box
         self.model_selection = QComboBox() #create combo box for GPT model selection
-        self.model_selection.addItems(["gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-4", "gpt-4-32k", "gpt-3.5-turbo-1106", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-instruct"]) #add GPT models to combo box
+        self.model_selection.addItems(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]) #add GPT models to combo box
         model_layout.addWidget(self.model_selection) #add GPT model selection to layout
         model_group.setLayout(model_layout) #set layout for group box
         inputs_layout.addWidget(model_group) #add group box to inputs layout

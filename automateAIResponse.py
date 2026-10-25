@@ -220,7 +220,7 @@ def generate_image_description(filepath, output_buffer):
     }
 
     payload = {
-        "model": "gpt-4-vision-preview", #use gpt-4-vision-preview model
+        "model": "gpt-4o", #use gpt-4o model
         "messages": [{
             "role": "user",
             "content": [{ 
