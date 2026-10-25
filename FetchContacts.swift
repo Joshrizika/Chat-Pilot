@@ -32,6 +32,7 @@ store.requestAccess(for: .contacts) { granted, error in
     var contactsDict = [String: String]()
     for (givenName, familyName, phoneNumber) in contactsArray {
         let fullName = "\(givenName) \(familyName)".trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fullName.isEmpty else { continue }
         contactsDict[fullName] = phoneNumber
     }
 
